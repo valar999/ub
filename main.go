@@ -143,16 +143,22 @@ func main() {
 
 	stats := make([]Stat, 0, numConns*int(duration.Seconds()))
 	errs := make([]Stat, 0)
+	startChan := make(chan bool)
 	stopChan := make(chan bool)
 	go func() {
+		var started bool
 		for {
 			select {
 			case stat := <-statsChan:
-				if stat.err == nil {
-					stats = append(stats, stat)
-				} else {
-					errs = append(errs, stat)
+				if started {
+					if stat.err == nil {
+						stats = append(stats, stat)
+					} else {
+						errs = append(errs, stat)
+					}
 				}
+			case <-startChan:
+				started = true
 			case <-stopChan:
 				return
 			}
@@ -169,9 +175,10 @@ func main() {
 		}()
 	}
 	startWG.Wait()
+	startChan <- true
 	time.Sleep(duration)
 	stopChan <- true
-	//time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 100)
 	cancel()
 	wg.Wait()
 	showStat(stats, errs, duration)
