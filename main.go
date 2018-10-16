@@ -35,7 +35,12 @@ func worker(ctx context.Context) {
 		conn, err := dialer.DialContext(ctx, "tcp", addr)
 		if err == nil {
 			stat.connect = time.Since(start)
-			go conn.Close()
+			go func() {
+				// SO_LINGER=0 reset conn
+				// no TIME_WAIT conn left
+				conn.(*net.TCPConn).SetLinger(0)
+				conn.Close()
+			}()
 		} else {
 			select {
 			case <-ctx.Done():
