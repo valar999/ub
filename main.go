@@ -15,6 +15,8 @@ import (
 
 type Stat struct {
 	connect time.Duration
+	reply   time.Duration
+	cmd     time.Duration
 	err     error
 }
 
@@ -35,12 +37,14 @@ func worker(ctx context.Context) {
 		conn, err := dialer.DialContext(ctx, "tcp", addr)
 		if err == nil {
 			stat.connect = time.Since(start)
-			go func() {
-				// SO_LINGER=0 reset conn
-				// no TIME_WAIT conn left
-				conn.(*net.TCPConn).SetLinger(0)
-				conn.Close()
-			}()
+			/*
+				go func() {
+					// SO_LINGER=0 reset conn
+					// no TIME_WAIT conn left
+					conn.(*net.TCPConn).SetLinger(0)
+					conn.Close()
+				}()
+			*/
 		} else {
 			select {
 			case <-ctx.Done():
@@ -49,6 +53,36 @@ func worker(ctx context.Context) {
 			}
 			stat.err = err
 		}
+
+		var n int
+		buf := make([]byte, 1024)
+		start = time.Now()
+		_, err = conn.Write([]byte(`{"id": 1, "method": "mining.subscribe", "params": ["MinerName/1.0.0", "EthereumStratum/1.0.0"]}`))
+		if err != nil {
+			log.Println("err", err)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			stat.err = err
+		}
+		n, err = conn.Read(buf)
+		log.Println("recv1", err, n, string(buf[:n]))
+
+		n, err = conn.Read(buf)
+		log.Println("recv2", err, n, string(buf[:n]))
+
+		n, err = conn.Read(buf)
+		log.Println("recv3", err, n, string(buf[:n]))
+
+		go func() {
+			// SO_LINGER=0 reset conn
+			// no TIME_WAIT conn left
+			conn.(*net.TCPConn).SetLinger(0)
+			conn.Close()
+		}()
+
 		select {
 		case <-ctx.Done():
 			return
